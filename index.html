@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Document object manipulation</title>
+</head>
+<body>
+              <h1 id="main-title">Hello, World!</h1>
+              <p class="description">This is a sample paragraph.</p>
+              <button onclick="changeText()">Change Text</button>
+              <div id="box" style="width: 100px; height:100px; color: rgb(9, 206, 140);"></div>
+              <button onclick="hideBox()">hide</button>
+              <button onclick="showBox()">show</button>
+
+             
+              
+</body>
+<script>
+function changeText(){
+              document.getElementById("main-title").textContent = "Hope you like the training";
+              var elems = document.getElementsByClassName("description");
+              if (elems.length > 0) {
+                  elems[0].textContent = "Now this text is changing through the DOM";
+              }
+              
+}
+
+function hideBox(){
+              document.getElementById("box").style.display="none";
+}
+function ShowBox(){
+              document.getElementById("box").style.display="none";
+}
+</script>
+</html>
