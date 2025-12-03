@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Enhanced Todo List</title>
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --accent: #0f172a;
+      --accent-2: #2563eb;
+      --muted: #6b7280;
+      --done: #10b981;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+      background: linear-gradient(180deg, #f8fafc, #eef2ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .app {
+      width: 100%;
+      max-width: 720px;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.06);
+    }
+    h1 { margin: 0 0 8px 0; font-size: 22px; color: var(--accent); }
+    p.lead { margin: 0 0 14px 0; color: var(--muted); font-size: 14px; }
+
+    .controls {
+      display:flex;
+      gap:8px;
+      margin-bottom: 12px;
+      flex-wrap:wrap;
+    }
+    input[type="text"].task-input {
+      flex: 1 1 320px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #e6e9f2;
+      font-size: 14px;
+      outline: none;
+    }
+    button.add {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent-2);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .search-row {
+      display:flex;
+      gap:8px;
+      align-items:center;
+      margin-bottom: 14px;
+      flex-wrap:wrap;
+    }
+    input.search {
+      flex: 1 1 200px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #e6e9f2;
+      font-size: 14px;
+    }
+
+    .meta {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    ul.task-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    li.task {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fbfdff;
+      border: 1px solid #eef2ff;
+      box-shadow: 0 1px 0 rgba(2,6,23,0.02) inset;
+    }
+    label.task-label {
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex: 1;
+      cursor: pointer;
+      user-select: none;
+    }
+    input[type="checkbox"] { width:18px; height:18px; cursor:pointer; }
+    .task-text {
+      font-size: 15px;
+      color: var(--accent);
+      word-break: break-word;
+    }
+    .task-text.done {
+      text-decoration: line-through;
+      color: var(--muted);
+      opacity: 0.8;
+    }
+    button.delete {
+      background: transparent;
+      border: 1px solid rgba(239,68,68,0.12);
+      color: #ef4444;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 22px;
+      color: var(--muted);
+      border-radius: 8px;
+      background: #fff;
+      border: 1px dashed #eef2ff;
+    }
+
+    @media (max-width:520px){
+      .controls { flex-direction: column; }
+      .search-row { flex-direction: column; align-items:stretch; }
+      button.add { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" aria-labelledby="title">
+    <h1 id="title">Enhanced Todo List</h1>
+    <p class="lead">Add tasks, mark done, delete, search in real time. Tasks persist using <code>localStorage</code>.</p>
+
+    <div class="controls" role="group" aria-label="Add task">
+      <input id="taskInput" class="task-input" type="text" placeholder="Add a new task..." aria-label="New task">
+      <button id="addBtn" class="add">Add Task</button>
+    </div>
+
+    <div class="search-row" role="search" aria-label="Search tasks">
+      <input id="searchInput" class="search" type="text" placeholder="Search tasks..." aria-label="Search tasks">
+      <div style="margin-left:auto;color:var(--muted);font-size:13px;" id="countInfo">0 tasks</div>
+    </div>
+
+    <div class="meta">
+      <div id="statusMsg">Ready</div>
+      <div>
+        <button id="clearAll" class="delete" title="Remove all tasks">Clear All</button>
+      </div>
+    </div>
+
+    <ul id="taskList" class="task-list" aria-live="polite"></ul>
+
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'todoTasks_v1';
+      const taskInput = document.getElementById('taskInput');
+      const addBtn = document.getElementById('addBtn');
+      const taskList = document.getElementById('taskList');
+      const searchInput = document.getElementById('searchInput');
+      const statusMsg = document.getElementById('statusMsg');
+      const countInfo = document.getElementById('countInfo');
+      const clearAllBtn = document.getElementById('clearAll');
+
+      // In-memory tasks array (keeps sync with localStorage)
+      let tasks = [];
+
+      // --- Utilities ---
+      function generateId() {
+        // timestamp + random to reduce collision chance
+        return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+      }
+
+      function saveToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        } catch (err) {
+          console.error('localStorage save error', err);
+          status('Error saving to localStorage', true);
+        }
+      }
+
+      function loadFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [];
+          return parsed;
+        } catch (err) {
+          console.error('localStorage load error', err);
+          status('Error reading from localStorage', true);
+          return [];
+        }
+      }
+
+      function status(text, isError = false) {
+        statusMsg.textContent = text;
+        statusMsg.style.color = isError ? '#b91c1c' : 'var(--muted)';
+      }
+
+      // --- Render ---
+      function renderTasks(filter = '') {
+        // normalize filter
+        const q = filter.trim().toLowerCase();
+        // Clear existing list nodes
+        while (taskList.firstChild) {
+          taskList.removeChild(taskList.firstChild); // using removeChild as required
+        }
+
+        const visible = tasks.filter(t => t.text.toLowerCase().includes(q));
+        // Update counts
+        countInfo.textContent = `${visible.length} / ${tasks.length} tasks`;
+
+        if (visible.length === 0) {
+          const empty = document.createElement('li');
+          empty.className = 'empty';
+          empty.textContent = tasks.length === 0 ? 'No tasks yet — add your first task!' : 'No tasks match your search.';
+          taskList.appendChild(empty);
+          return;
+        }
+
+        // Create list items
+        visible.forEach(task => {
+          const li = document.createElement('li');
+          li.className = 'task';
+          li.dataset.id = task.id;
+
+          // label + checkbox + text
+          const label = document.createElement('label');
+          label.className = 'task-label';
+          label.htmlFor = 'chk-' + task.id;
+
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.id = 'chk-' + task.id;
+          checkbox.checked = !!task.completed;
+          checkbox.setAttribute('aria-label', 'Mark task as completed');
+
+          const span = document.createElement('span');
+          span.className = 'task-text' + (task.completed ? ' done' : '');
+          span.textContent = task.text;
+
+          label.appendChild(checkbox);
+          label.appendChild(span);
+
+          // delete button
+          const del = document.createElement('button');
+          del.className = 'delete';
+          del.type = 'button';
+          del.textContent = 'Delete';
+          del.title = 'Delete task';
+
+          li.appendChild(label);
+          li.appendChild(del);
+
+          taskList.appendChild(li);
+        });
+      }
+
+      // --- Task operations ---
+      function addTask(text) {
+        const trimmed = text.trim();
+        if (!trimmed) {
+          status('Cannot add empty task', true);
+          return;
+        }
+        const newTask = {
+          id: generateId(),
+          text: trimmed,
+          completed: false
+        };
+        tasks.unshift(newTask); // newest on top
+        saveToStorage();
+        renderTasks(searchInput.value);
+        status('Task added');
+        taskInput.value = '';
+        taskInput.focus();
+      }
+
+      function toggleTaskCompletion(id) {
+        const idx = tasks.findIndex(t => t.id === id);
+        if (idx === -1) return;
+        tasks[idx].completed = !tasks[idx].completed;
+        saveToStorage();
+        renderTasks(searchInput.value);
+        status(tasks[idx].completed ? 'Task marked completed' : 'Task marked active');
+      }
+
+      function deleteTask(id) {
+        const idx = tasks.findIndex(t => t.id === id);
+        if (idx === -1) return;
+        // remove from array
+        tasks.splice(idx, 1);
+        saveToStorage();
+        // remove DOM node directly if present (demonstrate removeChild)
+        const node = taskList.querySelector('li[data-id="' + id + '"]');
+        if (node) {
+          taskList.removeChild(node);
+        }
+        // re-render to update counts and "empty" messages
+        renderTasks(searchInput.value);
+        status('Task deleted');
+      }
+
+      function clearAllTasks() {
+        if (!tasks.length) {
+          status('No tasks to clear');
+          return;
+        }
+        if (!confirm('Clear all tasks? This cannot be undone.')) {
+          status('Clear cancelled');
+          return;
+        }
+        tasks = [];
+        saveToStorage();
+        renderTasks('');
+        status('All tasks cleared');
+      }
+
+      // --- Event wiring ---
+      addBtn.addEventListener('click', () => addTask(taskInput.value));
+
+      // Enter to add
+      taskInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addTask(taskInput.value);
+        }
+      });
+
+      // Delegation for checkbox toggle and delete button
+      taskList.addEventListener('click', (e) => {
+        const li = e.target.closest('li.task');
+        if (!li) return;
+        const id = li.dataset.id;
+        if (e.target.matches('input[type="checkbox"]')) {
+          toggleTaskCompletion(id);
+        } else if (e.target.matches('button.delete')) {
+          deleteTask(id);
+        } else if (e.target.matches('label.task-label')) {
+          // clicking label will already toggle the checkbox — no extra work needed
+        }
+      });
+
+      // Real-time search
+      searchInput.addEventListener('input', (e) => {
+        renderTasks(e.target.value);
+      });
+
+      // Clear all
+      clearAllBtn.addEventListener('click', clearAllTasks);
+
+      // Keyboard shortcut: Ctrl/Cmd+K focuses search
+      window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          searchInput.focus();
+        }
+      });
+
+      // --- Initialization on load ---
+      window.addEventListener('DOMContentLoaded', () => {
+        tasks = loadFromStorage();
+        renderTasks('');
+        status('Ready');
+      });
+    })();
+  </script>
+</body>
+</html>

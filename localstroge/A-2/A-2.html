@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Persistent Notes (localStorage)</title>
+  <style>
+    :root {
+      --bg: #f7f7fb;
+      --card: #ffffff;
+      --accent: #4f46e5;
+      --muted: #6b7280;
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, var(--bg), #eef2ff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 780px;
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 6px 18px rgba(16,24,40,0.08);
+      padding: 20px;
+    }
+    h1 { margin: 0 0 12px 0; font-size: 20px; }
+    p.lead { margin: 0 0 18px 0; color: var(--muted); }
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #e6e9f2;
+      font-size: 15px;
+      resize: vertical;
+      box-sizing: border-box;
+      outline: none;
+      transition: box-shadow .12s ease;
+    }
+    textarea:focus { box-shadow: 0 0 0 4px rgba(79,70,229,0.08); border-color: var(--accent); }
+    .controls {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid rgba(79,70,229,0.12);
+    }
+    button.danger {
+      background: #ef4444;
+      color: #fff;
+    }
+    .status {
+      margin-top: 12px;
+      min-height: 20px;
+      color: #111827;
+      font-weight: 600;
+    }
+    .status .error { color: #b91c1c; font-weight: 600; }
+    small.hint { display:block; margin-top: 8px; color: var(--muted); }
+    @media (max-width:520px){
+      .controls { flex-direction: column; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="card" role="main" aria-labelledby="title">
+    <h1 id="title">Persistent Notes</h1>
+    <p class="lead">Write notes below. They are saved to your browser's <code>localStorage</code> and will persist across reloads.</p>
+
+    <label for="notes" class="sr-only">Your notes</label>
+    <textarea id="notes" placeholder="Type or paste your notes here..."></textarea>
+
+    <div class="controls" role="group" aria-label="Note actions">
+      <button id="saveBtn">Save Notes</button>
+      <button id="loadBtn" class="secondary">Load Notes</button>
+      <button id="clearBtn" class="danger" title="Delete stored notes">Clear Notes</button>
+    </div>
+
+    <div id="status" class="status" aria-live="polite"></div>
+    <small class="hint">Notes are stored locally in your browser only. They are not sent to any server.</small>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'userNotes';         // key used in localStorage
+      const textarea = document.getElementById('notes');
+      const saveBtn = document.getElementById('saveBtn');
+      const loadBtn = document.getElementById('loadBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const statusEl = document.getElementById('status');
+
+      // Utility: show status message (accessible)
+      function showStatus(message, type = 'info') {
+        statusEl.textContent = message;
+        statusEl.className = 'status' + (type === 'error' ? ' error' : '');
+      }
+
+      // Load notes from localStorage and display in textarea
+      function loadNotes() {
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored !== null) {
+            textarea.value = stored;
+            showStatus('Notes loaded from localStorage.');
+          } else {
+            // If nothing saved, do not change the textarea if user typed something — but we will clear status
+            showStatus('No saved notes found.');
+          }
+        } catch (err) {
+          console.error('Failed to load notes:', err);
+          showStatus('Unable to load notes (storage error).', 'error');
+        }
+      }
+
+      // Save current textarea content to localStorage after validating non-empty
+      function saveNotes() {
+        const content = textarea.value;
+        if (!content || content.trim().length === 0) {
+          showStatus('Cannot save empty notes. Please type something first.', 'error');
+          return;
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY, content);
+          showStatus('Notes saved successfully.');
+        } catch (err) {
+          console.error('Failed to save notes:', err);
+          showStatus('Failed to save notes (storage error).', 'error');
+        }
+      }
+
+      // Clear stored notes and optionally clear textarea
+      function clearNotes() {
+        // Confirm with user before permanently deleting stored notes (optional but often nice)
+        const confirmClear = confirm('Are you sure you want to delete the saved notes from localStorage? This cannot be undone.');
+        if (!confirmClear) {
+          showStatus('Clear canceled.');
+          return;
+        }
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+          // Also clear textarea to reflect removal (you may choose not to if prefer)
+          textarea.value = '';
+          showStatus('Saved notes cleared from localStorage.');
+        } catch (err) {
+          console.error('Failed to clear notes:', err);
+          showStatus('Failed to clear notes (storage error).', 'error');
+        }
+      }
+
+      // Event listeners
+      saveBtn.addEventListener('click', saveNotes);
+      loadBtn.addEventListener('click', loadNotes);
+      clearBtn.addEventListener('click', clearNotes);
+
+      // Auto-load notes on page load (requirement)
+      window.addEventListener('DOMContentLoaded', () => {
+        loadNotes();
+      });
+
+      // Optional: keyboard shortcut Ctrl/Cmd+S to save (prevents browser save dialog)
+      window.addEventListener('keydown', (e) => {
+        const sPressed = (e.key === 's' || e.key === 'S');
+        if (sPressed && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          saveNotes();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
